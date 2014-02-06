@@ -45,11 +45,12 @@ import subprocess as sp
 import sys
 import tempfile
 import os
-
+import time
 import numpy as np
 
 from pims.base_frames import FramesSequence
 from pims.frame import Frame
+
 
 def try_ffmpeg(FFMPEG_BINARY):
     try:
@@ -85,13 +86,12 @@ class FFmpegVideoReader(FramesSequence):
 
         self.filename = filename
         self.pix_fmt = pix_fmt
-        self._initialize()
         try:
             self.depth = _pix_fmt_dict[pix_fmt]
         except KeyError:
             raise ValueError("invalid pixel format")
-        w, h = self._size
-        self._stride = self.depth*w*h
+
+        self._initialize()
 
         if process_func is None:
             process_func = lambda x: x
@@ -113,24 +113,47 @@ class FFmpegVideoReader(FramesSequence):
 
         print "Decoding video file..."
         sys.stdout.flush()
-        CHUNKSIZE = 2**14  # utterly arbitrary
-        while True:
+        CHUNKSIZE = 2**15  # utterly arbitrary
+        j  = 0
+        fail_count = 0
+        while fail_count < 50:
+            j += 1
             try:
                 chunk = proc.stdout.read(CHUNKSIZE)
                 if len(chunk) == 0:
-                    break
+                    fail_count += 1
+                    time.sleep(.1)
+                    continue
                 self.data_buffer.write(chunk)
+                fail_count = 0
             except EOFError:
-                break
-        self.data_buffer.seek(0)
-
+                print fail_count
+                fail_count += 1
+                time.sleep(.1)
+        print j, 11925
         proc.wait()
         self._process_ffmpeg_stderr(proc.stderr.read(), True)
 
-        self.data_buffer.seek(0, os.SEEK_END)
-        self._len = self.data_buffer.tell() // self._stride
         for std in proc.stdin, proc.stdout, proc.stderr:
             std.close()
+
+        w, h = self._size
+        self._stride = self.depth*w*h
+        self.data_buffer.flush()
+        os.fsync(self.data_buffer.fileno())
+        print 'tell: ', self.data_buffer.tell()
+        self.data_buffer.seek(-2, 2)
+        print self.data_buffer.tell(), self._stride
+        self.data_buffer.seek(-2, 1)
+        print self.data_buffer.tell(), self._stride
+        self.data_buffer.seek(100*self._stride)
+        print self.data_buffer.tell(), self._stride
+        self.data_buffer.seek(0, 2)
+        print self.data_buffer.tell(), self._stride
+        self._len = (self.data_buffer.tell() )  // self._stride
+        print self._len
+
+        self.data_buffer.seek(0)
 
     def _process_ffmpeg_stderr(self, stderr, verbose=False):
         if verbose:
