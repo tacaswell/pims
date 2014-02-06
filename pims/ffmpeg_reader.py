@@ -44,19 +44,12 @@ import re
 import subprocess as sp
 import sys
 import tempfile
+import os
 
 import numpy as np
 
 from pims.base_frames import FramesSequence
 from pims.frame import Frame
-
-
-try:
-    from subprocess import DEVNULL  # py3k
-except ImportError:
-    import os
-    DEVNULL = open(os.devnull, 'wb')
-
 
 def try_ffmpeg(FFMPEG_BINARY):
     try:
@@ -77,6 +70,7 @@ for name in FFMPEG_BINARY_SUGGESTIONS:
     if try_ffmpeg(name):
         FFMPEG_BINARY = name
         break
+
 
 def available():
     return FFMPEG_BINARY is not None
@@ -105,7 +99,6 @@ class FFmpegVideoReader(FramesSequence):
             raise ValueError("process_func must be a function, or None")
         self.process_func = process_func
 
-
     def _initialize(self):
         """ Opens the file, creates the pipe. """
 
@@ -131,9 +124,11 @@ class FFmpegVideoReader(FramesSequence):
                 break
         self.data_buffer.seek(0)
 
-        self._process_ffmpeg_stderr(proc.stderr.read())
+        proc.wait()
+        self._process_ffmpeg_stderr(proc.stderr.read(), True)
 
-        proc.terminate()
+        self.data_buffer.seek(0, os.SEEK_END)
+        self._len = self.data_buffer.tell() // self._stride
         for std in proc.stdin, proc.stdout, proc.stderr:
             std.close()
 
@@ -152,8 +147,6 @@ class FFmpegVideoReader(FramesSequence):
         # get the size, of the form 460x320 (w x h)
         match = re.search(" [0-9]*x[0-9]*(,| )", line)
         self._size = map(int, line[match.start():match.end()-1].split('x'))
-        # this needs to be more robust
-        self._len = int(lines[-2].split()[1])
 
     def __len__(self):
         return self._len
