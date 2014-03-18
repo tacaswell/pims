@@ -34,6 +34,8 @@ _dtype_map = {4: np.uint8,
               8: np.uint8,
               16: np.uint16}
 
+_tiff_ext_set = {'tif', 'tiff', 'TIFF'}
+
 
 class TiffStack_libtiff(FramesSequence):
     """Iterable object that returns frames of video as numpy arrays.
@@ -107,6 +109,11 @@ class TiffStack_libtiff(FramesSequence):
     def __len__(self):
         return self._count
 
+    @classmethod
+    def class_exts(cls):
+        base_set = super(TiffStack_libtiff, cls).class_exts()
+        return base_set | _tiff_ext_set
+
 
 class TiffStack_pil(FramesSequence):
     '''
@@ -179,6 +186,11 @@ class TiffStack_pil(FramesSequence):
     def __len__(self):
         return self._count
 
+    @classmethod
+    def class_exts(cls):
+        base_set = super(TiffStack_libtiff, cls).class_exts()
+        return base_set | _tiff_ext_set
+
 
 class MM_TiffStack(TiffStack_pil):
     """
@@ -191,10 +203,10 @@ class MM_TiffStack(TiffStack_pil):
         cur = self.im.tell()
         if cur != j:
             self.im.seek(j)
-            xml_str = im_wrap.im.tag[270]
+            xml_str = self.im.tag[270]
             self.im.seek(cur)
         else:
-            xml_str = im_wrap.im.tag[270]
+            xml_str = self.im.tag[270]
         return _parse_mm_xml_string(xml_str)
 
 
@@ -269,6 +281,11 @@ class TiffSeries(FramesSequence):
 
     def __len__(self):
         return self._count
+
+    @classmethod
+    def class_exts(cls):
+        base_set = super(TiffStack_libtiff, cls).class_exts()
+        return base_set | _tiff_ext_set
 
 
 # needed for the wrapper classes
